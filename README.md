@@ -100,16 +100,17 @@ parse ──> retrieve ──> critique ──(通过/重试耗尽)──> gener
 
 ```bash
 # 1. 服务器准备(腾讯云轻量选「Docker CE」应用镜像,或手动装 Docker)
-mkdir -p /opt/cookgpt/data && cd /opt/cookgpt
+sudo mkdir -p /opt/cookgpt && sudo chown -R $(whoami) /opt/cookgpt
 
-# 2. 上传项目(代码 + .env;密钥在 .env 里,由 compose 运行时注入,不进镜像)
-rsync -az --exclude data --exclude .venv --exclude frontend/node_modules ./ ubuntu@服务器IP:/opt/cookgpt/
+# 2. 上传项目到 /opt/cookgpt/cookGPT(代码 + .env;密钥在 .env 里,由 compose 运行时注入,不进镜像)
+rsync -az --exclude .venv --exclude frontend/node_modules --exclude data ./ ubuntu@服务器IP:/opt/cookgpt/cookGPT/
 
-# 3. 已有向量数据直接拷入持久目录,10k 条免重导
-scp -r backend/data/* ubuntu@服务器IP:/opt/cookgpt/data/
+# 3. 已有向量数据拷入项目 data 目录(compose 挂载 ./data),10k 条免重导
+ssh ubuntu@服务器IP "mkdir -p /opt/cookgpt/cookGPT/data"
+scp -r backend/data/* ubuntu@服务器IP:/opt/cookgpt/cookGPT/data/
 
 # 4. 构建并启动
-ssh ubuntu@服务器IP "cd /opt/cookgpt && docker compose up -d --build"
+ssh ubuntu@服务器IP "cd /opt/cookgpt/cookGPT && docker compose up -d --build"
 docker compose logs -f   # 看日志
 ```
 
