@@ -23,6 +23,7 @@ const history = ref([]) // 多轮上下文(最近 3 轮),新建会话时为空
 const input = ref('')
 const sending = ref(false)
 const listEl = ref(null)
+const sidebarOpen = ref(false) // 移动端抽屉侧栏开关
 
 onMounted(loadConversations)
 
@@ -38,10 +39,12 @@ function newChat() {
   activeId.value = null
   messages.value = [{ ...WELCOME }]
   history.value = []
+  sidebarOpen.value = false // 移动端:选完关闭抽屉
 }
 
 async function selectConversation(id) {
   if (sending.value) return // 流式输出中不允许切换
+  sidebarOpen.value = false // 移动端:选完关闭抽屉
   activeId.value = id
   try {
     const msgs = await api.getMessages(id)
@@ -133,7 +136,10 @@ async function scrollToBottom(behavior = 'smooth') {
 
 <template>
   <div class="layout">
-    <aside class="sidebar">
+    <!-- 移动端抽屉遮罩:点空白处收起侧栏 -->
+    <div v-if="sidebarOpen" class="overlay" @click="sidebarOpen = false"></div>
+
+    <aside class="sidebar" :class="{ open: sidebarOpen }">
       <button class="new-chat" @click="newChat">＋ 新建对话</button>
       <div class="conv-list">
         <div
@@ -153,6 +159,7 @@ async function scrollToBottom(behavior = 'smooth') {
     <div class="chat-page">
       <header class="header">
         <div class="brand">
+          <button class="menu-btn" aria-label="会话列表" @click="sidebarOpen = !sidebarOpen">☰</button>
           <span class="logo">🍳</span>
           <span class="name">cookGPT</span>
         </div>
@@ -194,6 +201,7 @@ async function scrollToBottom(behavior = 'smooth') {
 <style scoped>
 .layout {
   height: 100vh;
+  height: 100dvh; /* 动态视口:iOS 地址栏收起/软键盘弹出时不溢出 */
   display: flex;
   background: #faf7f2;
 }
@@ -502,5 +510,99 @@ async function scrollToBottom(behavior = 'smooth') {
 .send:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ---------- 移动端适配(≤768px) ---------- */
+.menu-btn {
+  display: none;
+}
+
+.overlay {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* 汉堡按钮:唤起抽屉侧栏 */
+  .menu-btn {
+    display: block;
+    border: none;
+    background: transparent;
+    color: #fff;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 6px 8px;
+    margin-left: -8px;
+  }
+
+  /* 侧栏变 fixed 抽屉,默认滑出屏幕 */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 260px;
+    z-index: 30;
+    padding-top: calc(14px + env(safe-area-inset-top));
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: none;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+  }
+
+  .overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 20;
+  }
+
+  /* 触控目标加大 */
+  .conv-item {
+    padding: 12px 10px;
+  }
+
+  .conv-del {
+    visibility: visible; /* 触屏没有 hover,删除键常显 */
+    padding: 4px 8px;
+    font-size: 17px;
+  }
+
+  .new-chat {
+    padding: 12px;
+  }
+
+  /* 聊天区 */
+  .header {
+    padding: 10px 12px;
+    padding-top: calc(10px + env(safe-area-inset-top));
+  }
+
+  .username {
+    display: none; /* 手机上省宽度,只留退出键 */
+  }
+
+  .messages {
+    padding: 12px 10px;
+  }
+
+  .bubble {
+    max-width: 85%;
+  }
+
+  /* 输入区:底部留出 iPhone Home 条安全区 */
+  .composer {
+    padding: 8px 10px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .send {
+    padding: 10px 16px;
+  }
 }
 </style>
