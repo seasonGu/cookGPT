@@ -1,13 +1,24 @@
 # cookGPT 镜像:前端构建 + Python 运行时(含 Milvus Lite)
 # 单容器单进程,天然符合 Milvus Lite 的单进程约束;--workers 1 是硬性要求
+#
+# 注:这里用了 RUN --mount=type=cache,Docker 23+ 内置 BuildKit 前端已支持,
+# 不写 `# syntax=` 指令,免得国内服务器还要多拉一个 docker/dockerfile 镜像。
 
 # ---------- 阶段 1:构建前端 ----------
-FROM node:22-alpine AS web
+FROM node:22-slim AS web
 WORKDIR /build
+
 # 国内服务器构建用 npm 镜像(海外部署可删掉这行)
 ENV npm_config_registry=https://registry.npmmirror.com
-COPY frontend/package.json ./
-RUN npm install
+# 2GB 小机器上别让 node 堆无限涨,涨到换页就等于卡死
+ENV NODE_OPTIONS=--max-old-space-size=512
+
+# 带上 package-lock.json 用 npm ci:直接照锁文件装,省掉整棵依赖树的版本协商
+# (npm install 没有锁文件时要跟 registry 反复要元数据,这是慢的大头)
+COPY frontend/package.json frontend/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --no-audit --no-fund
+
 COPY frontend/ ./
 RUN npm run build
 
@@ -21,8 +32,13 @@ ENV PYTHONUNBUFFERED=1
 # pip 和 uv 各读各的变量,两个都要配
 ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 ENV UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
+# 配了 cache mount 后必须用 copy:缓存目录和 /app 不在同一文件系统,硬链接会失败
+ENV UV_LINK_MODE=copy
+
 COPY pyproject.toml uv.lock .python-version ./
-RUN pip install --no-cache-dir uv && uv sync --frozen --no-dev
+RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=cache,target=/root/.cache/uv \
+    pip install uv && uv sync --frozen --no-dev
 
 COPY backend/ backend/
 COPY main.py ./

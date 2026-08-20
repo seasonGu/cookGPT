@@ -1,5 +1,6 @@
 .git
 .venv
+.idea
 frontend/node_modules
 frontend/dist
 backend/data
@@ -8,3 +9,8 @@ __pycache__
 *.pyc
 .env
 deploy
+
+# 下面这些镜像里用不到,别白白传给 docker daemon
+recipes.sql
+generate_recipes.py
+*.md
