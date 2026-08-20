@@ -1,0 +1,26 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# 环境变量(含密钥,不入库)
+.env
+
+# IDE
+.idea/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Backend runtime data(本地 SQLite 用户库)
+backend/data/
+
+# Docker compose 挂载的数据目录
+data/

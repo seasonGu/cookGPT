@@ -1,0 +1,10 @@
+.git
+.venv
+frontend/node_modules
+frontend/dist
+backend/data
+data
+__pycache__
+*.pyc
+.env
+deploy

@@ -1,0 +1,19 @@
+# cookGPT systemd 服务
+# 安装: sudo cp deploy/cookgpt.service /etc/systemd/system/
+#       sudo systemctl daemon-reload && sudo systemctl enable --now cookgpt
+[Unit]
+Description=cookGPT API (FastAPI + Milvus Lite)
+After=network.target
+
+[Service]
+# 改成服务器上的实际用户(腾讯云 Ubuntu 默认 ubuntu)
+User=ubuntu
+WorkingDirectory=/opt/cookgpt
+# .env 由 config.py 的 load_dotenv 从 WorkingDirectory 自动加载
+# 重要:workers 必须保持 1 —— Milvus Lite 是单进程嵌入式库,且服务器仅 2GB
+ExecStart=/opt/cookgpt/.venv/bin/uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --workers 1
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+services:
+  cookgpt:
+    build: .
+    container_name: cookgpt
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # 数据持久化:向量库(Milvus Lite)+ 用户库(SQLite)。
+      # 宿主机目录务必放持久盘:mkdir -p /data/cookgpt/data
+      # 已有本地数据直接拷进去免重导:scp -r backend/data/* 服务器:/data/cookgpt/data/
+      - ./data:/app/backend/data
+    environment:
+      COOKGPT_MILVUS_DIR: /app/backend/data/milvus
+    env_file:
+      - .env
