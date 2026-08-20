@@ -4,6 +4,8 @@
 # ---------- 阶段 1:构建前端 ----------
 FROM node:22-alpine AS web
 WORKDIR /build
+# 国内服务器构建用 npm 镜像(海外部署可删掉这行)
+ENV npm_config_registry=https://registry.npmmirror.com
 COPY frontend/package.json ./
 RUN npm install
 COPY frontend/ ./
@@ -15,6 +17,8 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 
 # 用 uv 按锁文件装依赖(可复现),系统 Python 3.12 与 .python-version 一致
+# 国内服务器构建用 PyPI 镜像(pymilvus/pyarrow 几百 MB,直连 PyPI 会卡死;海外部署可删)
+ENV UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
 COPY pyproject.toml uv.lock .python-version ./
 RUN pip install --no-cache-dir uv && uv sync --frozen --no-dev
 
