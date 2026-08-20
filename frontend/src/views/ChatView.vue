@@ -7,6 +7,8 @@ import { api, chatStream } from '../api'
 import { clearAuth, username } from '../auth'
 
 // LLM 返回 markdown,渲染成安全 HTML(DOMPurify 先清洗,防 XSS)
+// breaks: true —— 单换行也渲染成 <br>,和聊天多行输入的直觉一致
+marked.setOptions({ gfm: true, breaks: true })
 function md(text) {
   return DOMPurify.sanitize(marked.parse(text || ''))
 }
@@ -365,8 +367,13 @@ async function scrollToBottom(behavior = 'smooth') {
   border-radius: 14px;
   font-size: 15px;
   line-height: 1.45;
-  white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* v-html 容器必须是块级:inline span 包块元素时,浏览器会在内容底部
+   多渲染一行匿名行盒,导致文字离气泡底部边框太远 */
+.md-body {
+  display: block;
 }
 
 .row.user .bubble {
@@ -458,12 +465,14 @@ async function scrollToBottom(behavior = 'smooth') {
 .composer textarea {
   flex: 1;
   resize: none;
-  padding: 8px 12px;
+  padding: 7px 12px;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   font-size: 15px;
   font-family: inherit;
   line-height: 1.4;
+  height: auto;
+  min-height: 0; /* 抵消部分浏览器给 textarea 的默认最小高度,避免底部多出空白 */
   max-height: 120px;
   box-sizing: border-box;
 }
