@@ -343,21 +343,12 @@ async function scrollToBottom(behavior = 'smooth') {
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 16px;
-  display: flex;
-  flex-direction: column;
-}
-
-/* 消息从底部生长:消息少时贴着输入框,不留大片空白;
-   用 margin-top:auto 而不是 justify-content:flex-end,
-   因为后者在内容溢出时顶部会被裁掉滚不回去 */
-.messages > :first-child {
-  margin-top: auto;
+  padding: 16px;
 }
 
 .row {
   display: flex;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .row.user {
@@ -370,10 +361,10 @@ async function scrollToBottom(behavior = 'smooth') {
 
 .bubble {
   max-width: 72%;
-  padding: 11px 15px;
+  padding: 10px 14px;
   border-radius: 14px;
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -413,16 +404,16 @@ async function scrollToBottom(behavior = 'smooth') {
 .bubble :deep(h2),
 .bubble :deep(h3),
 .bubble :deep(h4) {
-  margin: 12px 0 6px;
+  margin: 8px 0 3px;
   font-weight: 700;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 .bubble :deep(h3) { font-size: 16px; }
 .bubble :deep(h4) { font-size: 15px; }
-.bubble :deep(p) { margin: 6px 0; }
+.bubble :deep(p) { margin: 3px 0; }
 .bubble :deep(ul),
-.bubble :deep(ol) { margin: 6px 0; padding-left: 22px; }
-.bubble :deep(li) { margin: 3px 0; }
+.bubble :deep(ol) { margin: 3px 0; padding-left: 20px; }
+.bubble :deep(li) { margin: 1px 0; }
 .bubble :deep(strong) { font-weight: 700; }
 .bubble :deep(code) {
   background: #f3f4f6;
@@ -458,8 +449,8 @@ async function scrollToBottom(behavior = 'smooth') {
 .composer {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 8px;
+  padding: 10px 12px;
   background: #fff;
   border-top: 1px solid #f0e9df;
 }
@@ -467,12 +458,12 @@ async function scrollToBottom(behavior = 'smooth') {
 .composer textarea {
   flex: 1;
   resize: none;
-  padding: 11px 14px;
+  padding: 8px 12px;
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  border-radius: 10px;
   font-size: 15px;
   font-family: inherit;
-  line-height: 1.5;
+  line-height: 1.4;
   max-height: 120px;
   box-sizing: border-box;
 }
@@ -484,9 +475,9 @@ async function scrollToBottom(behavior = 'smooth') {
 }
 
 .send {
-  padding: 11px 22px;
+  padding: 8px 18px;
   border: none;
-  border-radius: 12px;
+  border-radius: 10px;
   font-size: 15px;
   font-weight: 600;
   color: #fff;
