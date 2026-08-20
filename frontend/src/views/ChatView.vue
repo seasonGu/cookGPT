@@ -1,8 +1,15 @@
 <script setup>
 import { nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { api, chatStream } from '../api'
 import { clearAuth, username } from '../auth'
+
+// LLM 返回 markdown,渲染成安全 HTML(DOMPurify 先清洗,防 XSS)
+function md(text) {
+  return DOMPurify.sanitize(marked.parse(text || ''))
+}
 
 const WELCOME = { role: 'assistant', content: '你好,我是 cookGPT 🍳 想吃什么?可以问我菜谱推荐或做法,比如「给我推荐一道不辣的家常菜」。' }
 
@@ -162,7 +169,9 @@ async function scrollToBottom(behavior = 'smooth') {
         >
           <div class="bubble" :class="{ error: msg.error }">
             <span v-if="msg.streaming && !msg.content" class="typing">正在思考…</span>
-            <template v-else>{{ msg.content }}<span v-if="msg.streaming" class="cursor">▌</span></template>
+            <template v-else>
+              <span class="md-body" v-html="md(msg.content)"></span><span v-if="msg.streaming" class="cursor">▌</span>
+            </template>
           </div>
         </div>
       </main>
@@ -389,6 +398,47 @@ async function scrollToBottom(behavior = 'smooth') {
   color: #f97316;
   animation: blink 0.9s steps(1) infinite;
 }
+
+/* ---------- markdown 渲染样式(v-html 内容需 :deep 才能命中 scoped)---------- */
+.bubble :deep(h1),
+.bubble :deep(h2),
+.bubble :deep(h3),
+.bubble :deep(h4) {
+  margin: 12px 0 6px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.bubble :deep(h3) { font-size: 16px; }
+.bubble :deep(h4) { font-size: 15px; }
+.bubble :deep(p) { margin: 6px 0; }
+.bubble :deep(ul),
+.bubble :deep(ol) { margin: 6px 0; padding-left: 22px; }
+.bubble :deep(li) { margin: 3px 0; }
+.bubble :deep(strong) { font-weight: 700; }
+.bubble :deep(code) {
+  background: #f3f4f6;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #c2410c;
+}
+.bubble :deep(pre) {
+  background: #1f2937;
+  color: #f9fafb;
+  padding: 10px 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.bubble :deep(pre code) {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+.bubble :deep(table) { border-collapse: collapse; margin: 8px 0; }
+.bubble :deep(th),
+.bubble :deep(td) { border: 1px solid #e5e7eb; padding: 6px 10px; font-size: 14px; }
+.bubble :deep(th) { background: #faf7f2; }
 
 @keyframes blink {
   50% {
