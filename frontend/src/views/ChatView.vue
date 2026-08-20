@@ -343,12 +343,21 @@ async function scrollToBottom(behavior = 'smooth') {
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 16px;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 消息从底部生长:消息少时贴着输入框,不留大片空白;
+   用 margin-top:auto 而不是 justify-content:flex-end,
+   因为后者在内容溢出时顶部会被裁掉滚不回去 */
+.messages > :first-child {
+  margin-top: auto;
 }
 
 .row {
   display: flex;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .row.user {
