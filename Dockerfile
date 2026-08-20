@@ -17,7 +17,9 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 
 # 用 uv 按锁文件装依赖(可复现),系统 Python 3.12 与 .python-version 一致
-# 国内服务器构建用 PyPI 镜像(pymilvus/pyarrow 几百 MB,直连 PyPI 会卡死;海外部署可删)
+# 国内服务器构建用 PyPI 镜像(pymilvus/pyarrow 几百 MB,直连 PyPI 会卡死;海外部署可删):
+# pip 和 uv 各读各的变量,两个都要配
+ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 ENV UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
 COPY pyproject.toml uv.lock .python-version ./
 RUN pip install --no-cache-dir uv && uv sync --frozen --no-dev
