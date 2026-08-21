@@ -44,6 +44,15 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                username   TEXT PRIMARY KEY,
+                profile    TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            )
+            """
+        )
         # 首次启动时种一个演示账号,方便直接登录体验
         count = conn.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
         if count == 0:

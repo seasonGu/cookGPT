@@ -12,7 +12,7 @@ import logging
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
-from backend.app import agent, conversations
+from backend.app import agent, conversations, profile
 from backend.app.auth import get_current_user
 from backend.app.models import ChatRequest
 
@@ -46,7 +46,18 @@ def chat(req: ChatRequest, username: str = Depends(get_current_user)):
                 history = msgs[-6:]
             conversations.append_message(conv_id, "user", req.message)
 
-            state = agent.run_agent(req.message, history)
+            # 用户饮食画像:从库读入 → 图内使用 → 增量合并回库(跨会话记住忌口)
+            user_profile = profile.load_profile(username)
+            state = agent.run_agent(req.message, history, user_profile)
+            try:
+                update = state.get("profile_update") or {}
+                if any(update.values()):
+                    profile.save_profile(
+                        username, profile.merge_profile(user_profile, update)
+                    )
+            except Exception:
+                logger.warning("画像落库失败,不影响本轮回答", exc_info=True)
+
             final_stream = state.get("final_response")
             if final_stream is None:
                 yield _sse({"error": "生成阶段没有产出,请重试", "conversation_id": conv_id})
