@@ -1,11 +1,15 @@
 """cookGPT Agent(LangGraph):意图解析 → 策略检索 → 搭配审核(可重试)→ 最终生成。
 
 图结构:
-    parse ──> retrieve ──> critique ──(通过/重试耗尽)──> generate ──> END
-                             │ 未通过且未耗尽
-                             └────────────> retrieve   (带审核反馈重新检索)
+                 ┌─ is_recipe_request=false ──> chat ──> END   (寒暄/闲聊旁路,不检索)
+    parse ───────┤
+                 └─ is_recipe_request=true ──> retrieve ──> critique ──(通过/重试耗尽)──> generate ──> END
+                                                    │ 未通过且未耗尽
+                                                    └────────────> retrieve   (带审核反馈重新检索)
 
-- parse/retrieve/critique 是同步节点;generate 节点返回一个流式生成器,
+- parse 先做意图分类:寒暄、闲聊、与饮食无关的问题不调用 RAG 工具,
+  直接走 chat 节点用大模型简单回应,省一次向量检索 + 审核的延迟和成本。
+- parse/retrieve/critique 是同步节点;chat/generate 节点返回一个流式生成器,
   由接口层逐段推给前端,保住流式体验。
 - 审核重试上限 MAX_RETRIES 防止死循环。
 """
@@ -33,6 +37,7 @@ class AgentState(TypedDict):
     user_input: str  # 用户原始输入
     history: list[dict]  # 多轮对话历史(最近几轮)
     parsed_constraints: dict  # 第一步 Parser 解析出的 JSON 约束
+    is_recipe_request: bool  # 是否菜谱/饮食相关请求;false 走寒暄旁路
     retrieved_recipes: list[dict]  # 第二步检索到的候选菜谱(完整信息)
     critic_feedback: str  # 第三步 Critic 的审核意见
     is_approved: bool  # 审核是否通过
@@ -45,12 +50,14 @@ class AgentState(TypedDict):
 # Prompts
 # ---------------------------------------------------------------------------
 
-PARSE_PROMPT = """把用户的饮食需求解析成适合菜谱检索的结构化约束。
+PARSE_PROMPT = """把用户的饮食需求解析成适合菜谱检索的结构化约束,并判断是否需要检索菜谱。
 
 输出 JSON(不要输出其他内容):
-{"search_query": "改写后的检索词(描述想吃的菜品/口味/场景,25 字以内)", "dietary": ["辛辣", "海鲜", ...], "notes": "其他要求摘要:人数/场合/荤素搭配/口味偏好等,没有则写 无"}
+{"search_query": "改写后的检索词(描述想吃的菜品/口味/场景,25 字以内)", "dietary": ["辛辣", "海鲜", ...], "notes": "其他要求摘要:人数/场合/荤素搭配/口味偏好等,没有则写 无", "is_recipe_request": true/false}
 
 规则:
+- is_recipe_request:用户是否在咨询菜谱/饮食相关(推荐、做法、忌口、食材、养生食疗等);寒暄("你好"、"在吗")、道谢、闲聊、与饮食无关的问题为 false
+- is_recipe_request 为 false 时,search_query 填用户原话即可,dietary 返回 []
 - 口语化需求转成菜品/做法描述:如"来大姨妈了"→"温补暖身汤"、"感冒了"→"清淡易消化"、"朋友聚餐"→"荤素搭配宴客菜"
 - dietary 只从 ["辛辣", "海鲜"] 中选,是用户【不能吃】的;用户【想吃】的(如"想吃辣")不要放进去
 - 没有忌口时 dietary 返回 []"""
@@ -70,6 +77,14 @@ CRITIQUE_PROMPT = """你是 cookGPT 的主厨兼营养师,审核「为满足用�
 {"is_pass": true/false, "feedback": "不通过时的具体改进意见,给检索步骤用(如:太油腻了,要清淡做法;通过时为空字符串)", "menu": [{"recipe_id": 123, "name": "菜名", "reason": "入选理由(结合用户需求)"}]}
 
 menu 只从候选菜谱里选,recipe_id 必须是候选菜谱的 id;通过时选 1-3 道最合适的。"""
+
+CHAT_PROMPT = """你是 cookGPT,一位亲切的 AI 私厨助手。用户的消息与菜谱咨询无关(寒暄、道谢、闲聊、其他问题)。
+
+要求:
+1. 简短友好地回应,一两句话即可,不要啰嗦
+2. 自然地把话题引导回饮食:问问用户想吃什么、有什么忌口或场景
+3. 不要推荐具体菜谱,不要编造食材和步骤
+4. 中文"""
 
 GENERATE_PROMPT = """你是 cookGPT,一位专业又亲切的 AI 私厨,根据主厨审核通过的菜单为用户生成最终回答。
 
@@ -123,8 +138,28 @@ def parse_intent_node(state: AgentState) -> dict:
             "search_query": state["user_input"],
             "dietary": [],
             "notes": "无",
+            "is_recipe_request": True,
         }
-    return {"parsed_constraints": constraints, "retry_count": 0}
+    # 解析失败时默认走检索链路(宁可多查一次,也不错把菜谱需求当闲聊)
+    is_recipe_request = constraints.get("is_recipe_request", True) if isinstance(constraints, dict) else True
+    return {
+        "parsed_constraints": constraints,
+        "is_recipe_request": bool(is_recipe_request),
+        "retry_count": 0,
+    }
+
+
+def chat_node(state: AgentState) -> dict:
+    """旁路节点:寒暄/闲聊/无关问题,不调 RAG,直接大模型简单回应。"""
+    history = state.get("history", [])[-4:]
+    messages = [{"role": "system", "content": CHAT_PROMPT}]
+    messages += [{"role": m["role"], "content": m["content"]} for m in history]
+    messages.append({"role": "user", "content": state["user_input"]})
+
+    def chat_stream():
+        yield from stream(messages, max_tokens=300)
+
+    return {"final_response": chat_stream()}
 
 
 def retrieve_recipes_node(state: AgentState) -> dict:
@@ -206,6 +241,13 @@ def generate_response_node(state: AgentState) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def route_after_parse(state: AgentState) -> str:
+    """意图路由:菜谱相关走检索链路;寒暄闲聊走 chat 旁路,不调 RAG 工具。"""
+    if state.get("is_recipe_request", True):
+        return "retrieve"
+    return "chat"
+
+
 def route_after_critique(state: AgentState) -> str:
     """条件路由:审核通过或重试耗尽 -> 生成;否则带反馈退回检索。"""
     if state["is_approved"] or state["retry_count"] >= MAX_RETRIES:
@@ -218,8 +260,14 @@ workflow.add_node("parse", parse_intent_node)
 workflow.add_node("retrieve", retrieve_recipes_node)
 workflow.add_node("critique", critique_menu_node)
 workflow.add_node("generate", generate_response_node)
+workflow.add_node("chat", chat_node)
 workflow.set_entry_point("parse")
-workflow.add_edge("parse", "retrieve")
+workflow.add_conditional_edges(
+    "parse",
+    route_after_parse,
+    {"retrieve": "retrieve", "chat": "chat"},
+)
+workflow.add_edge("chat", END)
 workflow.add_edge("retrieve", "critique")
 workflow.add_conditional_edges(
     "critique",
@@ -237,6 +285,7 @@ def run_agent(user_input: str, history: list[dict]) -> dict:
         "user_input": user_input,
         "history": history,
         "parsed_constraints": {},
+        "is_recipe_request": True,
         "retrieved_recipes": [],
         "critic_feedback": "",
         "is_approved": False,
